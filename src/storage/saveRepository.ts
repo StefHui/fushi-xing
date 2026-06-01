@@ -2,8 +2,9 @@ import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
 
 import type { GameState, SaveSummary } from '../types/game';
+import { DB_NAME, WEB_SAVE_PREFIX as WEB_SAVE_PREFIX_CONFIG } from '../config/storage';
 
-const DATABASE_NAME = 'project-wanderer.db';
+const DATABASE_NAME = DB_NAME;
 const DATABASE_VERSION = 1;
 
 let databasePromise: Promise<SQLite.SQLiteDatabase> | null = null;
@@ -102,7 +103,7 @@ async function getDatabase() {
   return databasePromise;
 }
 
-const WEB_SAVE_PREFIX = 'project-wanderer-save:';
+const WEB_SAVE_PREFIX = WEB_SAVE_PREFIX_CONFIG;
 
 function isWebPreview() {
   return Platform.OS === 'web';

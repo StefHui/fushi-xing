@@ -1,6 +1,8 @@
 import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
 
+import { DB_NAME, WEB_KEY_SETTINGS } from '../config/storage';
+
 export interface PersistedSettings {
   provider: 'openai' | 'claude' | 'off';
   openaiKey: string;
@@ -19,8 +21,8 @@ const DEFAULT_SETTINGS: PersistedSettings = {
   gameMode: 'offline',
 };
 
-const WEB_KEY = 'project-wanderer-settings';
-const DB_NAME = 'project-wanderer.db'; // same DB as saves
+const WEB_KEY = WEB_KEY_SETTINGS;
+const DB_NAME_RESOLVED = DB_NAME;
 const SETTINGS_ROW_KEY = 'ai_settings';
 
 export async function loadSettings(): Promise<PersistedSettings> {
@@ -34,7 +36,7 @@ export async function loadSettings(): Promise<PersistedSettings> {
   }
 
   try {
-    const db = await SQLite.openDatabaseAsync(DB_NAME);
+    const db = await SQLite.openDatabaseAsync(DB_NAME_RESOLVED);
     await db.execAsync(
       `CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);`,
     );
@@ -55,7 +57,7 @@ export async function saveSettings(settings: PersistedSettings): Promise<void> {
   }
 
   try {
-    const db = await SQLite.openDatabaseAsync(DB_NAME);
+    const db = await SQLite.openDatabaseAsync(DB_NAME_RESOLVED);
     await db.execAsync(
       `CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);`,
     );
