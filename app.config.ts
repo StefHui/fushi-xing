@@ -46,6 +46,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   web: {
     favicon: './assets/favicon.png',
+    publicPath: '/fushi-xing/',
   },
   extra: {
     appEnv: ENV,
