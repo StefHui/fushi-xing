@@ -1,251 +1,95 @@
-# 浮世行 (Fushi Xing) — Project Handoff
+# 浮世行 (Fushi Xing) — Next Chat Handoff
 
-## 1. What Has Been Built
+## Project
+Local-first mobile text RPG. React Native Expo ~56 + TypeScript + Zustand + expo-sqlite.
+Working directory: `/Users/hui/Documents/MUD Game (Codex)`
+GitHub: https://github.com/StefHui/fushi-xing (public repo)
+Live web: https://stefhui.github.io/fushi-xing (auto-deploys on push to main)
 
-Project Wanderer is a local-first, mobile-first open-world text RPG prototype built with React Native Expo, TypeScript, Zustand, and SQLite.
+## What's built
 
-Core playable loop:
-- Opening screen in Traditional Chinese Cantonese.
-- World type selection: `武俠`, `修仙`, `末日`, `無限流`.
-- Character setup asks only for name, gender, and age.
-- No class, profession, skills, faction, title, chosen-one setup, fixed ending, or forced main quest at start.
-- World-specific personality test.
-- Deterministic character stats and world seed generation.
-- Story screen with A/B/C/D/E choices.
-- Custom free action input.
-- Character, inventory, map, quest, NPC, combat, world log, and save/load screens.
-- Local save/load through SQLite on native platforms.
-- Web preview fallback uses `localStorage`.
+| Engine | File | What it does |
+|---|---|---|
+| Combat v2 | `src/engine/combatEngine.ts` | Stamina, distance, 9 body parts, 6-level injury, full enemy stats |
+| World events | `src/engine/worldEventEngine.ts` | `advanceWorld`, rumors, world history |
+| NPC | `src/engine/npcEngine.ts` | Memories, relationships, 4 interaction types |
+| Story | `src/engine/storyEngine.ts` | Choice router: work-menu / work-do / npc-talk / observe / free-move |
+| Location | `src/engine/locationEngine.ts` | 6 locations per world type, scene text, work opportunities, NPC roles |
+| Work | `src/engine/workEngine.ts` | 7 work actions (劈柴/搬貨/採藥/打獵/跟獵人入山/客棧幫工/跑腿), time/reward/NPC/combat |
+| Skill & Profession | `src/engine/skillEngine.ts` | 10 hidden skills, 9 professions, action tracking, diminishing returns |
+| Economy | `src/engine/economyEngine.ts` | 3-tier currency, 10 market items/world, dynamic pricing, buy/sell |
+| Story Hooks | `src/engine/storyHookEngine.ts` | 24 hook templates (6/world), 6 stages, auto-advance, discovery via NPC/exploration |
+| AI narration | `src/ai/` (5 files) | Offline template provider + OpenAI + Claude providers, contextBuilder, prompts |
 
-Implemented systems:
-- Character creation and stats engine.
-- Personality test engine by world type.
-- World seed generator.
-- Story and choice system.
-- Free action system.
-- Hybrid combat system:
-  - Default combat buttons.
-  - Custom combat input.
-  - Body-part targeting.
-  - Injury system.
-  - Invalid action rejection.
-  - Combat log.
-  - No AI calculation.
-- NPC memory and relationship system:
-  - NPCs per world.
-  - Relationship values: trust, caution, respect, familiarity.
-  - Disposition states.
-  - NPC memory records with importance, date, emotional effect.
-- Dynamic world event simulation:
-  - World clock.
-  - World tension.
-  - World event pressure/status/visibility.
-  - World advances on story choices, free actions, combat, and NPC interactions.
-- World History Log and Rumor System:
-  - New `日誌` page.
-  - World history records every simulated event tick.
-  - Rumors may be true, false, half-true, or outdated.
-  - Rumors can come from tea houses, markets, merchants, NPCs, or faction members.
-  - Story page shows latest rumors.
-  - Map page only shows public events and rumors, not all hidden world state.
+## Key architecture rules
+- **Never rewrite** — always extend with `ensure*` migration helpers
+- Load chain: `ensureHookSystem(ensureEconomy(ensureSkillSystem(ensureWorldSimulation(ensureNPCs(ensureCombat(game))))))`
+- `worldTick()` in store wraps `advanceWorld` + `advanceHooks` every 2 turns
+- TypeScript must pass clean: `npx tsc --noEmit`
+- All UI copy: Traditional Chinese Cantonese
+- No AI for game math — AI only for narration/dialogue
 
-## 2. Current File Structure
+## Game Mode System
+- **Offline Mode** (default) — fully playable with template-based narration, no API key needed
+- **AI Enhanced Mode** — optional OpenAI or Claude for narration/dialogue/action interpretation
+- Settings screen (`設定`) shows mode selector at the top
 
-Important project files:
+## Environment Setup
+| Env | App Name | Bundle ID | DB file |
+|---|---|---|---|
+| test | 浮世行 TEST | com.stefhui.fushixing.test | project-wanderer-test.db |
+| uat | 浮世行 UAT | com.stefhui.fushixing.uat | project-wanderer-uat.db |
+| production | 浮世行 | com.stefhui.fushixing | project-wanderer.db |
 
-```text
-.
-├── App.tsx
-├── app.json
-├── index.ts
-├── package.json
-├── package-lock.json
-├── tsconfig.json
-├── HANDOFF.md
-├── assets/
-│   ├── icon.png
-│   ├── splash-icon.png
-│   ├── favicon.png
-│   ├── android-icon-background.png
-│   ├── android-icon-foreground.png
-│   └── android-icon-monochrome.png
-└── src/
-    ├── data/
-    │   └── personalityQuestions.ts
-    ├── engine/
-    │   ├── combatEngine.ts
-    │   ├── npcEngine.ts
-    │   ├── personalityTestEngine.ts
-    │   ├── statsEngine.ts
-    │   ├── storyEngine.ts
-    │   ├── worldEventEngine.ts
-    │   └── worldSeedGenerator.ts
-    ├── state/
-    │   └── useGameStore.ts
-    ├── storage/
-    │   └── saveRepository.ts
-    └── types/
-        └── game.ts
-```
+Switch env: `APP_ENV=uat npx expo start --web`
 
-Generated / dependency folders:
-- `node_modules/`
-- `.expo/`
+## Current state of App.tsx
+Monolithic ~2450 lines. All screens in one file — most urgent tech debt.
+Screens: opening, create, personality, story, character, inventory, market, map, quest, npcs, combat, log, saves, settings.
 
-## 3. Important Files
+**Bottom tab bar (5 tabs):** 故事 / 地圖 / 角色 / 背包 / 日誌
+人物 and 戰鬥 removed from tabs — they appear inside story flow.
 
-`App.tsx`
-- Main UI shell and all current screens.
-- Screens include opening, create, personality, story, combat, NPCs, character, inventory, map, log, quest, saves.
-- All interface copy is Traditional Chinese Cantonese.
+## Story Flow (as designed)
+- Story is the main screen
+- Choices are contextual by `story.phase`: work-menu → job list → job result → follow-up
+- NPC dialogue happens inline in story (no separate tab needed)
+- Inline combat panel appears when `game.combat.status === '進行中'`
+- Map tab shows tappable locations with 📍 current location marker
+- Stat strip shows: character stats / money / current location / stamina
 
-`src/types/game.ts`
-- Central domain model.
-- Defines world types, character, stats, story, combat, NPCs, world events, world history, rumors, saves.
-- Start here before changing data shape.
+## GameState fields (recent additions)
+- `currentLocation: string` — current location ID (migrated in loadGame)
+- `story.phase?: StoryPhase` — 'scene' | 'work-menu' | 'work-result' | 'npc-talk' | 'location-arrive'
+- `story.activeNpcId?: string` — NPC in focus during npc-talk
 
-`src/state/useGameStore.ts`
-- Zustand store.
-- Orchestrates game flow and connects engines together.
-- Most actions eventually update `game`.
-- Important migrations happen here when loading saves via `ensureCombat`, `ensureNPCs`, and `ensureWorldSimulation`.
+## Story choice ID format
+Choice IDs encode routing:
+- `work-menu::<locationId>` → show work menu
+- `work-do::<workId>::<locationId>` → execute work action
+- `npc-talk::<npcId>` → inline NPC dialogue
+- `observe::<locationId>` → observation scene
+- `back-to-scene::<locationId>` → return to location
+- `free-move` → hint player to open map tab
 
-`src/storage/saveRepository.ts`
-- Local persistence layer.
-- Native: `expo-sqlite`.
-- Web preview: `localStorage`.
-- Save payload is serialized full `GameState`.
-
-`src/engine/worldEventEngine.ts`
-- Dynamic world simulation.
-- Creates world clock, events, history entries, and rumors.
-- `advanceWorld` is called after player actions.
-
-`src/engine/npcEngine.ts`
-- NPC generation, relationship deltas, memory recording, and save migration for old NPC memory shapes.
-
-`src/engine/combatEngine.ts`
-- Local deterministic combat calculations.
-- Handles target body parts, default/custom actions, injury generation, invalid action rejection, enemy counter.
-
-`src/engine/storyEngine.ts`
-- Opening story, A/B/C/D/E choices, free action story updates, map and quest seeds.
-
-`src/data/personalityQuestions.ts`
-- World-specific personality test content.
-
-## 4. Current Bugs / Known Issues
-
-No TypeScript errors:
-- `npx tsc --noEmit` currently passes.
-
-Known issues / limitations:
-- No automated unit tests yet.
-- No native-device QA has been done in this handoff; most verification was Expo web preview.
-- Browser preview URL is `http://localhost:8091/`; `http://localhost:8090/` may show the Expo native manifest, not the app UI.
-- Bottom tab bar is crowded because there are many systems: story, combat, NPCs, character, inventory, map, log, quest, saves. Mobile UX may need grouping or a menu.
-- `App.tsx` is large and should be split into screen components soon.
-- Save format is full JSON payload. Good for prototype, but future migrations should be formalized.
-- Combat custom input works in app, but browser automation had trouble typing due to in-app browser clipboard limitations. This is a test-tool limitation, not confirmed app logic failure.
-- `npm install` previously reported moderate dependency audit warnings. They were not force-fixed to avoid breaking Expo SDK compatibility.
-- World history can include undiscovered internal events marked `未證實`; design intent is okay, but UX copy may need tuning if this feels too revealing.
-
-## 5. Recommended Next Task
-
-Recommended next task: split the monolithic UI and stabilize save migrations.
-
-Suggested order:
-1. Split `App.tsx` into screen components under `src/screens/`.
-2. Add a migration/version field to save payloads.
-3. Add basic unit tests for:
-   - `advanceWorld`
-   - rumor generation truth states
-   - NPC memory importance/emotional effect
-   - combat invalid action rejection
-4. Add a compact navigation pattern for mobile, because the bottom tab bar is now too crowded.
-5. Add NPC dialogue snippets that reference memories:
-   - If trust increased, greeting text changes.
-   - If caution increased, NPC gives vaguer rumors.
-   - If memory importance is 3, NPC explicitly references it.
-
-Good next feature after cleanup:
-- A `Talk` interaction screen for each NPC, using local rules only.
-- It should draw from NPC memories, relationship, current world rumors, and world event visibility.
-
-## 6. Design Decisions Already Made
-
-Project rules:
-- The player is not the chosen one.
-- The world does not revolve around the player.
-- The player starts with no class, no profession, no skills, no faction, and no meaningful title.
-- Skills, identity, jobs, reputation, and relationships should emerge from actions.
-- The player can ignore main stories and rumors.
-- Early game should not be a world-ending quest.
-- No AI integration yet.
-- No backend, multiplayer, payment, combat economy, or full faction simulation yet.
-
-Architecture:
-- Local-first.
-- Zustand owns in-memory game state.
-- SQLite persists full game state on native.
-- `localStorage` is only for Expo web preview.
-- Engines are pure/local TypeScript modules as much as possible.
-- UI is currently in `App.tsx`, but should be split soon.
-- Save/load should preserve old data through `ensure*` migration helpers.
-
-Language / UI:
-- Interface language is Traditional Chinese Cantonese.
-- Mobile-first, dark fantasy, text-focused, easy-to-tap buttons.
-- Clean card-based layout, 8px-ish radius.
-- No decorative landing page; first screen is the actual game start.
-
-World simulation:
-- Internal world events exist even if player does not act.
-- Not every world event is shown directly to the player.
-- Rumors are the player-facing discovery layer.
-- Rumors can be true, false, half-true, or outdated.
-- World history records all ticks, with discovered/undiscovered state.
-
-NPC system:
-- NPCs are not omniscient.
-- NPC memories represent what they saw, heard, or experienced.
-- Relationships are multidimensional, not a single affection meter.
-- NPC memories include importance and emotional effect so future dialogue can reference them.
-
-Combat:
-- No AI required for basic calculation.
-- Combat uses local deterministic-ish rules.
-- Body part targeting affects accuracy, damage, and injury chance.
-- Invalid custom actions are rejected instead of interpreted magically.
-
-## Run / Verify
-
-Install dependencies:
-
+## Local dev
 ```bash
-npm install
+cd "/Users/hui/Documents/MUD Game (Codex)"
+npx expo start --web        # localhost:8081
 ```
+Claude Code preview: `.claude/launch.json` configured for port 8081.
 
-Type check:
+## Known issues / next tasks
+1. **Split App.tsx** into `src/screens/` — most urgent tech debt
+2. `npc-ask-work` and `npc-ask-rumor` in storyEngine.ts are stubbed — need real resolution
+3. Story hooks start undiscovered — early game feels sparse
+4. Save format has no version field yet
+5. iPhone: Expo Go incompatible with SDK 56; need Xcode (USB) or EAS build
 
-```bash
-npx tsc --noEmit
-```
-
-Native Expo:
-
-```bash
-npm start
-```
-
-Web preview:
-
-```bash
-npx expo start --web --localhost --port 8091
-```
-
-Open:
-
-```text
-http://localhost:8091/
-```
+## Design rules (never break these)
+- Player is NOT the chosen one
+- No class/profession/skill at start — everything emerges from actions
+- No forced main quest
+- No backend, no multiplayer, no AI for game math
+- Local-first, SQLite on native / localStorage on web
+- DB file name stays `project-wanderer.db` for production (changing it orphans existing saves)
