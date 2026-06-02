@@ -107,11 +107,20 @@ export interface Choice {
   nextBeat: string;
 }
 
+export type StoryPhase =
+  | 'scene'          // normal scene
+  | 'work-menu'      // picking a job
+  | 'work-result'    // result of a job
+  | 'npc-talk'       // talking to an NPC inline
+  | 'location-arrive'; // just arrived at a new location
+
 export interface StoryNode {
   id: string;
   title: string;
   body: string;
   choices: Choice[];
+  phase?: StoryPhase;
+  activeNpcId?: string; // NPC in focus for npc-talk phase
 }
 
 export interface InventoryItem {
@@ -414,6 +423,9 @@ export interface GameState {
 
   // Story hooks
   storyHooks: StoryHook[];
+
+  // Current location
+  currentLocation: string;
 
   // Economy
   wallet: Currency;

@@ -37,14 +37,10 @@ const PRIMARY_COMBAT_ACTIONS: Array<{ id: CombatActionId; label: string; hint: s
 ];
 const GAME_TABS: Array<{ id: ScreenId; label: string }> = [
   { id: 'story', label: '故事' },
-  { id: 'combat', label: '戰鬥' },
-  { id: 'npcs', label: '人物' },
+  { id: 'map', label: '地圖' },
   { id: 'character', label: '角色' },
   { id: 'inventory', label: '背包' },
-  { id: 'map', label: '地圖' },
   { id: 'log', label: '日誌' },
-  { id: 'quest', label: '任務' },
-  { id: 'saves', label: '存檔' },
 ];
 
 export default function App() {
@@ -81,6 +77,7 @@ export default function App() {
     setDraftCharacter,
     setFreeActionDraft,
     setScreen,
+    travelToLocation,
     startNewGame,
     submitFreeActionWithAI,
     dismissAiNarration,
@@ -304,6 +301,29 @@ export default function App() {
               ))}
             </View>
 
+            <View style={styles.statStrip}>
+              <View style={[styles.statPill, { backgroundColor: '#2a2f1e' }]}>
+                <Text style={[styles.statValue, { color: '#d6f36d' }]}>
+                  {game.wallet.copper >= 1000
+                    ? `${Math.floor(game.wallet.copper / 1000)}兩${game.wallet.copper % 1000 > 0 ? `${game.wallet.copper % 1000}文` : ''}`
+                    : `${game.wallet.copper}文`}
+                </Text>
+                <Text style={styles.statLabel}>錢</Text>
+              </View>
+              {game.currentLocation && (
+                <View style={[styles.statPill, { backgroundColor: '#1a2030' }]}>
+                  <Text style={[styles.statValue, { fontSize: 11 }]}>
+                    {game.map.find((m) => m.id === game.currentLocation)?.name ?? game.currentLocation}
+                  </Text>
+                  <Text style={styles.statLabel}>位置</Text>
+                </View>
+              )}
+              <View style={styles.statPill}>
+                <Text style={styles.statValue}>{game.combat.playerStamina}</Text>
+                <Text style={styles.statLabel}>體力</Text>
+              </View>
+            </View>
+
             <View style={styles.storyPanel}>
               <Text style={styles.kicker}>{game.world.type} / 第 {game.turn} 回合</Text>
               <Text style={styles.sectionTitle}>{game.story.title}</Text>
@@ -358,17 +378,89 @@ export default function App() {
               {game.rumors.length === 0 && <EmptyState text="暫時未聽到可靠傳聞。" />}
             </View>
 
-            <Text style={styles.subhead}>A / B / C / D / E</Text>
-            <View style={styles.choiceStack}>
-              {game.story.choices.map((choice: Choice) => (
-                <Pressable key={choice.id} style={styles.choiceCard} onPress={() => selectChoice(choice.id)}>
-                  <Text style={styles.choiceTitle}>
-                    {choice.key}. {choice.label}
-                  </Text>
-                  <Text style={styles.choiceText}>{choice.hint}</Text>
-                </Pressable>
-              ))}
-            </View>
+            {/* ── Inline combat panel ─────────────────────── */}
+            {game.combat.status === '進行中' && (
+              <View style={styles.infoCard}>
+                <Text style={styles.kicker}>⚔️ 戰鬥中 — 第 {game.combat.round} 回合</Text>
+                <View style={styles.segmentRow}>
+                  <View style={styles.statPill}>
+                    <Text style={styles.statValue}>{game.combat.playerStamina}</Text>
+                    <Text style={styles.statLabel}>你嘅體力</Text>
+                  </View>
+                  <View style={styles.statPill}>
+                    <Text style={styles.statValue}>{game.combat.enemy.stamina}</Text>
+                    <Text style={styles.statLabel}>{game.combat.enemy.name}</Text>
+                  </View>
+                  <View style={styles.statPill}>
+                    <Text style={styles.statValue}>{game.combat.distance}</Text>
+                    <Text style={styles.statLabel}>距離</Text>
+                  </View>
+                </View>
+                <View style={styles.choiceStack}>
+                  {(['快攻', '重擊', '防守', '推開'] as const).map((action) => (
+                    <Pressable
+                      key={action}
+                      style={styles.choiceCard}
+                      onPress={() => executeCombatAction(action)}
+                      disabled={isBusy}
+                    >
+                      <Text style={styles.choiceTitle}>{action}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <SecondaryButton
+                  label="詳細戰鬥畫面"
+                  onPress={() => setScreen('combat')}
+                  disabled={isBusy}
+                />
+              </View>
+            )}
+
+            {/* ── After combat ────────────────────────────── */}
+            {(game.combat.status === '勝利' || game.combat.status === '失敗' || game.combat.status === '撤退') && (
+              <View style={[styles.infoCard, { borderColor: game.combat.status === '勝利' ? '#d6f36d' : '#ff6b6b' }]}>
+                <Text style={styles.kicker}>
+                  {game.combat.status === '勝利' ? '✅ 戰鬥勝利' : game.combat.status === '失敗' ? '❌ 戰鬥失敗' : '🏃 撤退'}
+                </Text>
+                <Text style={styles.choiceText}>
+                  {game.combat.status === '勝利' ? '對方失去戰意。你可以繼續行動。' :
+                   game.combat.status === '失敗' ? '傷勢過重，只能退走。' : '你成功脫身。'}
+                </Text>
+              </View>
+            )}
+
+            {/* ── Choices ─────────────────────────────────── */}
+            {game.combat.status !== '進行中' && (
+              <>
+                <Text style={styles.subhead}>
+                  {game.story.phase === 'work-menu' ? '工作機會' :
+                   game.story.phase === 'work-result' ? '下一步' :
+                   game.story.phase === 'npc-talk' ? '如何回應' :
+                   '你想做咩'}
+                </Text>
+                <View style={styles.choiceStack}>
+                  {game.story.choices.map((choice: Choice) => (
+                    <Pressable
+                      key={choice.id}
+                      style={[styles.choiceCard, choice.id === 'free-move' && { borderColor: '#7e8796' }]}
+                      onPress={() => {
+                        if (choice.id === 'free-move') {
+                          setScreen('map');
+                        } else {
+                          selectChoice(choice.id);
+                        }
+                      }}
+                      disabled={isBusy}
+                    >
+                      <Text style={styles.choiceTitle}>
+                        {choice.key}. {choice.label}
+                      </Text>
+                      <Text style={styles.choiceText}>{choice.hint}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            )}
 
             <Text style={styles.subhead}>自訂行動</Text>
             <TextInput
@@ -818,14 +910,28 @@ export default function App() {
             ))}
             {game.rumors.length === 0 && <EmptyState text="你未聽到任何傳聞。" />}
 
-            <Text style={styles.subhead}>已知地點</Text>
-            {game.map.map((location) => (
-              <View key={location.id} style={styles.infoCard}>
-                <Text style={styles.choiceTitle}>{location.name}</Text>
-                <Text style={styles.kicker}>{location.status}</Text>
-                <Text style={styles.choiceText}>{location.note}</Text>
-              </View>
-            ))}
+            <Text style={styles.subhead}>地點（點擊移動）</Text>
+            {game.map.map((location) => {
+              const isCurrent = location.id === game.currentLocation;
+              return (
+                <Pressable
+                  key={location.id}
+                  style={[styles.choiceCard, isCurrent && styles.segmentActive]}
+                  onPress={() => location.status !== '未到過' && travelToLocation(location.id)}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={[styles.choiceTitle, isCurrent && styles.segmentTextActive]}>
+                      {isCurrent ? '📍 ' : ''}{location.name}
+                    </Text>
+                    <Text style={styles.kicker}>{location.status}</Text>
+                  </View>
+                  <Text style={styles.choiceText}>{location.note}</Text>
+                  {location.status === '未到過' && (
+                    <Text style={[styles.choiceText, { color: '#7e8796', fontStyle: 'italic' }]}>未探索 — 需要先到達</Text>
+                  )}
+                </Pressable>
+              );
+            })}
           </ScrollView>
         )}
 

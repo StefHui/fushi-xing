@@ -25,6 +25,7 @@ import {
   resolveChoice,
   resolveFreeAction,
 } from '../engine/storyEngine';
+import { buildLocationArriveStory } from '../engine/locationEngine';
 import { buildCharacterStats } from '../engine/statsEngine';
 import {
   advanceWorld,
@@ -110,6 +111,7 @@ interface GameStore {
   answerPersonalityQuestion: (questionId: string, optionId: string) => void;
   startNewGame: () => Promise<void>;
   selectChoice: (choiceId: string) => void;
+  travelToLocation: (locationId: string) => void;
   setFreeActionDraft: (value: string) => void;
   submitFreeAction: () => void;
   submitFreeActionWithAI: () => Promise<void>;
@@ -259,6 +261,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       mainProfession: null,
       sideProfessions: [],
       pendingProfessionUnlock: null,
+      currentLocation: 'market',
     };
 
     await saveGameState(game);
@@ -275,6 +278,28 @@ export const useGameStore = create<GameStore>((set, get) => ({
         aiNarration: null,
         aiActionRejection: null,
         game: worldTick(choice ? recordStoryChoiceForNPCs(nextGame, choice.label) : nextGame, choice?.label ?? '故事選擇'),
+      };
+    }),
+
+  travelToLocation: (locationId) =>
+    set((state) => {
+      if (!state.game) return { game: state.game };
+      const now = new Date().toISOString();
+      // Unlock location if not yet known
+      const updatedMap = state.game.map.map((m) =>
+        m.id === locationId && m.status === '未到過' ? { ...m, status: '已知' as const } : m,
+      );
+      const arriveStory = buildLocationArriveStory({ ...state.game, map: updatedMap }, locationId);
+      return {
+        game: {
+          ...state.game,
+          currentLocation: locationId,
+          map: updatedMap,
+          story: arriveStory,
+          turn: state.game.turn + 1,
+          updatedAt: now,
+        },
+        currentScreen: 'story' as const,
       };
     }),
 
@@ -530,8 +555,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!game) {
       throw new Error('搵唔到呢個存檔。');
     }
+    const loaded = ensureHookSystem(ensureEconomy(ensureSkillSystem(ensureWorldSimulation(ensureNPCs(ensureCombat(game))))));
     set({
-      game: ensureHookSystem(ensureEconomy(ensureSkillSystem(ensureWorldSimulation(ensureNPCs(ensureCombat(game)))))),
+      game: {
+        ...loaded,
+        currentLocation: loaded.currentLocation ?? loaded.map[0]?.id ?? 'market',
+      },
       currentScreen: 'story',
       lastSavedAt: game.updatedAt,
       selectedWorldType: game.world.type,
